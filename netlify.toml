@@ -1,4 +1,4 @@
 [build]
   base = "nebula-visions-engine-main"
   command = "npm run build"
-  publish = ".output/public"
+  publish = "dist"
