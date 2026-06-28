@@ -1,0 +1,1488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Atharv C. Joshi — Deep Space Uplink</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- CDNs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/typed.js@2.1.0/dist/typed.umd.js"></script>
+
+    <!-- Three.js r128 Post-Processing (cinematic look) -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/FilmShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/FilmPass.js"></script>
+
+    <style>
+        :root {
+            /* Palette updated to match reference images (deep blue, vibrant gold/purple) */
+            --void: #02040a;
+            --space-deep: #081024;
+            --space-mid: #102040;
+            --nebula-rose: #d66487;
+            --nebula-violet: #4d2d73;
+            --galaxy-gold: #f2a65a;
+            --galaxy-amber: #ff7b00;
+            --cosmos-blue: #1e5b9e;
+            --ice-blue: #a3d9f5;
+            
+            --hud-cyan: #4cd2ff;
+            --hud-white: #ffffff;
+            --hud-amber: #ffb454;
+            --hud-red: #ff4b4b;
+
+            --text-1: #eef6fb;
+            --text-2: #a2bace;
+            --text-3: #4b6887;
+
+            --glow-hud: 0 0 15px rgba(76,210,255,0.4), 0 0 40px rgba(76,210,255,0.15);
+            --glow-gold: 0 0 20px rgba(242,166,90,0.45), 0 0 60px rgba(242,166,90,0.15);
+            --glow-amber: 0 0 15px rgba(255,180,84,0.4), 0 0 50px rgba(255,180,84,0.15);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            background-color: var(--void);
+            color: var(--text-1);
+            font-family: 'Space Grotesk', sans-serif;
+            overflow-x: hidden;
+            overscroll-behavior: none;
+            cursor: none; 
+        }
+
+        .flight-container {
+            height: 900vh;
+            width: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        #webgl-canvas, #cursor-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+        }
+        #webgl-canvas { z-index: 0; }
+        #cursor-canvas { z-index: 9999; }
+
+        #loader {
+            position: fixed;
+            inset: 0;
+            background: var(--void);
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Space Mono', monospace;
+            color: var(--hud-cyan);
+            transition: opacity 1s ease-out;
+        }
+        #loader-bar { width: 300px; height: 2px; background: var(--space-mid); margin-top: 20px; position: relative; }
+        #loader-fill { height: 100%; background: var(--hud-cyan); width: 0%; box-shadow: var(--glow-hud); transition: width 0.2s; }
+
+        .hud-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 100;
+            pointer-events: none; 
+        }
+
+        #progress-bar {
+            position: absolute;
+            top: 0; left: 0;
+            height: 2px; width: 0%;
+            background: linear-gradient(90deg, var(--galaxy-gold), var(--cosmos-blue), var(--hud-cyan));
+            z-index: 1000;
+        }
+
+        .top-bar {
+            position: absolute; top: 0; left: 0; width: 100%;
+            height: 60px;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 40px;
+            border-bottom: 1px solid rgba(76,210,255,0.1);
+            background: linear-gradient(180deg, rgba(2,4,10,0.9) 0%, rgba(2,4,10,0) 100%);
+            backdrop-filter: blur(4px);
+            font-family: 'Space Mono', monospace;
+            font-size: 12px;
+            color: var(--hud-cyan);
+            pointer-events: auto;
+        }
+        
+        .top-bar .nav-links { display: flex; gap: 30px; align-items: center; }
+        .top-bar .nav-links span { cursor: pointer; transition: color 0.3s; pointer-events: auto; }
+        .top-bar .nav-links span:hover { color: var(--hud-white); text-shadow: var(--glow-hud); }
+        
+        .resume-btn {
+            color: var(--hud-amber) !important;
+            border: 1px solid var(--hud-amber);
+            padding: 6px 12px;
+            border-radius: 4px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            pointer-events: auto;
+            display: inline-block;
+        }
+        .resume-btn:hover {
+            background: rgba(255,180,84,0.15);
+            box-shadow: var(--glow-amber);
+            color: var(--hud-white) !important;
+        }
+
+        .telemetry-strip {
+            position: absolute; bottom: 0; left: 0; width: 100%;
+            height: 40px;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 40px;
+            border-top: 1px solid rgba(76,210,255,0.1);
+            background: rgba(2,4,10,0.8);
+            font-family: 'Space Mono', monospace;
+            font-size: 11px;
+            color: var(--text-2);
+            pointer-events: auto;
+        }
+        .telemetry-data { color: var(--hud-cyan); }
+        
+        .audio-btn {
+            cursor: pointer;
+            color: var(--hud-amber);
+            border: 1px solid var(--hud-amber);
+            padding: 4px 10px;
+            border-radius: 3px;
+            transition: all 0.3s;
+        }
+        .audio-btn:hover { background: rgba(255,180,84,0.2); box-shadow: var(--glow-amber); color: #fff;}
+
+        .hud-panel {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 90%; max-width: 1200px;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.4s ease, transform 0.4s ease;
+        }
+        .hud-panel.active { opacity: 1; visibility: visible; }
+
+        .title-bebas { font-family: 'Bebas Neue', sans-serif; letter-spacing: 4px; line-height: 1; }
+        .mono-label { font-family: 'Space Mono', monospace; font-size: 12px; color: var(--hud-cyan); letter-spacing: 1px; }
+
+        /* Panels */
+        #panel-launch { text-align: center; margin-top: 15vh; }
+        #panel-launch h1 { font-size: 8rem; background: linear-gradient(90deg, var(--galaxy-gold), var(--cosmos-blue)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 20px rgba(242,166,90,0.2)); }
+        #panel-launch .mono-label { color: var(--ice-blue); margin-bottom: 20px; font-size: 16px; }
+        .scroll-prompt { margin-top: 60px; font-family: 'Space Mono'; font-size: 12px; color: var(--text-2); animation: pulse 2s infinite; }
+
+        #panel-galaxy { left: 10%; transform: translateY(-50%); max-width: 600px; }
+        #panel-galaxy h2 { margin-bottom: 10px; }
+        #panel-galaxy h1 { font-size: 6rem; background: linear-gradient(90deg, var(--hud-white), var(--hud-cyan)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        #panel-galaxy .typed-text { font-size: 20px; font-weight: 300; color: var(--text-2); margin-top: 10px; height: 30px; }
+
+        #panel-planet { display: flex; align-items: flex-start; justify-content: flex-start; left: 10%; transform: translateY(-50%); gap: 40px; }
+        .scan-card { 
+            border: 1px solid rgba(76,210,255,0.3); background: rgba(5,11,26,0.7); backdrop-filter: blur(10px);
+            padding: 20px; font-family: 'Space Mono', monospace; font-size: 13px; color: var(--hud-cyan);
+            box-shadow: inset 0 0 20px rgba(76,210,255,0.05); width: 340px;
+        }
+        .scan-card hr { border: none; border-top: 1px dashed rgba(76,210,255,0.3); margin: 15px 0; }
+        .scan-card .val { color: var(--hud-white); float: right; }
+        .scan-card .status { color: var(--hud-amber); float: right; text-shadow: var(--glow-amber); }
+        .planet-bio { font-size: 1.2rem; line-height: 1.6; color: var(--text-1); max-width: 450px; text-shadow: 0 2px 10px rgba(0,0,0,0.8); }
+
+        .station-card {
+            position: absolute; border: 1px solid rgba(76,210,255,0.3); background: rgba(8,16,36,0.85);
+            padding: 25px; width: 450px; font-family: 'Space Mono', monospace;
+            opacity: 0; pointer-events: none; transition: opacity 0.3s;
+            box-shadow: var(--glow-hud); backdrop-filter: blur(8px);
+        }
+        .station-card.active { opacity: 1; pointer-events: auto; }
+        .station-card .bay-title { color: var(--text-2); font-size: 11px; margin-bottom: 15px; }
+        .station-card h3 { color: var(--hud-white); font-size: 18px; margin-bottom: 10px; }
+        .station-card .tech-stack { color: var(--hud-cyan); font-size: 12px; margin-bottom: 20px; border-bottom: 1px solid rgba(76,210,255,0.2); padding-bottom: 10px; }
+        .station-card ul { list-style: none; color: var(--text-1); font-size: 13px; line-height: 1.8; font-family: 'Space Grotesk'; }
+        .station-card ul li::before { content: '▸'; color: var(--hud-cyan); margin-right: 10px; }
+
+        .asteroid-label {
+            position: absolute; font-family: 'Space Mono', monospace; font-size: 12px;
+            color: var(--text-2); padding: 5px 10px; border: 1px solid rgba(138,168,194,0.3);
+            background: rgba(2,4,10,0.8); transform: translate(-50%, -50%); pointer-events: none;
+            transition: all 0.2s ease; opacity: 0; display: none;
+        }
+        .asteroid-label.visible { opacity: 1; }
+        .asteroid-label.mastered { color: var(--hud-amber); border-color: var(--hud-amber); box-shadow: var(--glow-amber); }
+        .asteroid-label.proficient { color: var(--hud-cyan); border-color: var(--hud-cyan); box-shadow: var(--glow-hud); }
+
+        #panel-skills { left: 10%; transform: translateY(-50%); }
+        .skills-container {
+            border: 1px solid rgba(76,210,255,0.3); background: rgba(5,11,26,0.8); backdrop-filter: blur(10px);
+            padding: 30px; font-family: 'Space Mono', monospace; width: 450px;
+            box-shadow: inset 0 0 30px rgba(76,210,255,0.05);
+        }
+        .skills-container h2 { font-family: 'Bebas Neue'; font-size: 32px; color: var(--hud-white); letter-spacing: 2px; margin-bottom: 20px; border-bottom: 1px solid rgba(76,210,255,0.3); padding-bottom: 10px;}
+        .skill-group { margin-bottom: 20px; }
+        .skill-group .title { font-size: 12px; color: var(--text-2); margin-bottom: 10px; }
+        .skill-group .title.master { color: var(--hud-amber); text-shadow: var(--glow-amber); }
+        .skill-group .title.prof { color: var(--hud-cyan); text-shadow: var(--glow-hud); }
+        .skill-list { display: flex; flex-wrap: wrap; gap: 8px; }
+        .skill-tag { 
+            padding: 4px 8px; font-size: 11px; border: 1px solid rgba(138,168,194,0.3); 
+            background: rgba(2,4,10,0.5); color: var(--text-1);
+        }
+
+        .achievement-card {
+            position: absolute; border-left: 2px solid var(--hud-amber); padding-left: 15px;
+            opacity: 0; visibility: hidden; transform: translateY(20px); transition: all 0.5s ease; width: 300px;
+        }
+        .achievement-card.active { opacity: 1; visibility: visible; transform: translateY(0); }
+        .achievement-card .status { font-family: 'Space Mono'; font-size: 11px; color: var(--hud-amber); text-shadow: var(--glow-amber); margin-bottom: 5px; }
+        .achievement-card h3 { font-family: 'Bebas Neue'; font-size: 28px; color: var(--hud-white); letter-spacing: 1px; }
+        .achievement-card p { font-family: 'Space Grotesk'; font-size: 14px; color: var(--text-2); }
+
+        #panel-uplink { text-align: left; max-width: 600px; margin: 0 auto; left: 50%; transform: translate(-50%, -50%); }
+        .uplink-terminal { border: 1px solid var(--hud-cyan); background: rgba(5,11,26,0.85); padding: 30px; font-family: 'Space Mono'; font-size: 14px; color: var(--hud-cyan); box-shadow: var(--glow-hud); backdrop-filter: blur(10px); }
+        .uplink-terminal a { color: var(--hud-white); text-decoration: none; pointer-events: auto; }
+        .uplink-terminal a:hover { text-decoration: underline; text-shadow: var(--glow-hud); }
+        .uplink-btn { display: inline-block; margin-top: 20px; padding: 10px 20px; background: rgba(76,210,255,0.1); border: 1px solid var(--hud-cyan); color: var(--hud-cyan); cursor: pointer; pointer-events: auto; transition: all 0.3s; }
+        .uplink-btn:hover { background: var(--hud-cyan); color: var(--void); box-shadow: var(--glow-hud); }
+
+        @keyframes pulse { 0% { opacity: 0.3; } 50% { opacity: 1; } 100% { opacity: 0.3; } }
+
+        @media (max-width: 768px) {
+            body { cursor: auto; }
+            #cursor-canvas { display: none; }
+            .top-bar { padding: 0 15px; }
+            .top-bar .nav-links { display: none; }
+            #panel-launch h1 { font-size: 4rem; }
+            #panel-galaxy h1 { font-size: 3.5rem; }
+            #panel-planet { flex-direction: column; left: 50%; width: 90%; gap: 20px; }
+            .scan-card, .skills-container { width: 100%; }
+            .station-card { position: fixed; top: auto; bottom: 80px; left: 5%; width: 90%; }
+        }
+
+        /* ===== ENHANCEMENT UI ===== */
+        .hud-btn {
+            cursor: pointer; color: var(--hud-cyan); border: 1px solid rgba(76,210,255,0.5);
+            padding: 4px 10px; border-radius: 3px; transition: all 0.25s; pointer-events: auto;
+            font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: 1px; user-select: none;
+        }
+        .hud-btn:hover, .hud-btn.on { background: rgba(76,210,255,0.18); box-shadow: var(--glow-hud); color: #fff; }
+
+        #scan-sweep {
+            position: fixed; inset: 0; z-index: 90; pointer-events: none; opacity: 0;
+            background:
+              repeating-linear-gradient(0deg, rgba(76,210,255,0.07) 0px, rgba(76,210,255,0.07) 1px, transparent 2px, transparent 4px),
+              repeating-linear-gradient(90deg, rgba(76,210,255,0.05) 0px, rgba(76,210,255,0.05) 1px, transparent 2px, transparent 4px);
+            transition: opacity 0.4s;
+        }
+        #scan-sweep.on { opacity: 1; }
+        #scan-sweep::after {
+            content: ''; position: absolute; left: 0; width: 100%; height: 160px;
+            background: linear-gradient(180deg, transparent, rgba(76,210,255,0.35), transparent);
+            box-shadow: 0 0 40px rgba(76,210,255,0.6);
+            animation: scanline-move 2.6s linear infinite;
+        }
+        @keyframes scanline-move { 0% { top: -160px; } 100% { top: 100%; } }
+
+        .deep-dive-btn {
+            margin-top: 18px; cursor: pointer; text-align: center;
+            color: var(--hud-cyan); border: 1px solid var(--hud-cyan);
+            padding: 8px; font-family: 'Space Mono', monospace; font-size: 12px;
+            letter-spacing: 1px; transition: all 0.25s; pointer-events: auto;
+        }
+        .deep-dive-btn:hover { background: rgba(76,210,255,0.18); box-shadow: var(--glow-hud); color: #fff; }
+
+        #deep-dive-modal {
+            position: fixed; inset: 0; z-index: 10001; display: none;
+            align-items: center; justify-content: center;
+            background: radial-gradient(circle at center, rgba(8,16,36,0.55), rgba(2,4,10,0.92));
+            backdrop-filter: blur(6px); pointer-events: auto;
+        }
+        #deep-dive-modal.active { display: flex; animation: ddfade 0.35s ease; }
+        @keyframes ddfade { from { opacity: 0; } to { opacity: 1; } }
+        .dd-frame {
+            position: relative; width: 90%; max-width: 880px; max-height: 86vh; overflow-y: auto;
+            border: 1px solid var(--hud-cyan); background: rgba(5,11,26,0.92);
+            box-shadow: 0 0 60px rgba(76,210,255,0.35), inset 0 0 40px rgba(76,210,255,0.08);
+            padding: 36px 40px; font-family: 'Space Mono', monospace; color: var(--hud-cyan);
+            animation: ddscale 0.4s cubic-bezier(.2,.9,.3,1);
+        }
+        @keyframes ddscale { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        .dd-frame::before {
+            content: ''; position: absolute; inset: 6px; border: 1px solid rgba(76,210,255,0.15); pointer-events: none;
+        }
+        .dd-close { position: absolute; top: 14px; right: 18px; cursor: pointer; color: var(--hud-amber); font-size: 18px; }
+        .dd-close:hover { color: #fff; text-shadow: var(--glow-amber); }
+        .dd-tag { color: var(--galaxy-gold); font-size: 12px; letter-spacing: 2px; }
+        .dd-frame h2 { font-family: 'Bebas Neue'; font-size: 42px; color: #fff; letter-spacing: 3px; margin: 8px 0 6px; line-height: 1; }
+        .dd-stack { color: var(--hud-cyan); font-size: 12px; margin-bottom: 18px; }
+        .dd-frame p { font-family: 'Space Grotesk'; color: var(--text-2); font-size: 14px; line-height: 1.7; margin-bottom: 18px; }
+        .dd-arch {
+            border: 1px dashed rgba(76,210,255,0.4); background: rgba(2,4,10,0.6);
+            padding: 16px; white-space: pre; overflow-x: auto; font-size: 12px; color: var(--ice-blue);
+            line-height: 1.6; margin-bottom: 18px;
+        }
+        .dd-feat { list-style: none; color: var(--text-1); font-family: 'Space Grotesk'; font-size: 14px; line-height: 1.9; margin-bottom: 20px; }
+        .dd-feat li::before { content: '\25B8'; color: var(--hud-cyan); margin-right: 10px; }
+        .dd-links { display: flex; gap: 14px; flex-wrap: wrap; }
+        .dd-links a {
+            text-decoration: none; color: var(--hud-amber); border: 1px solid var(--hud-amber);
+            padding: 8px 16px; font-size: 12px; letter-spacing: 1px; transition: all 0.25s;
+        }
+        .dd-links a:hover { background: rgba(255,180,84,0.18); box-shadow: var(--glow-amber); color: #fff; }
+        #fire-hint {
+            position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%);
+            font-family: 'Space Mono', monospace; font-size: 11px; color: var(--text-3);
+            letter-spacing: 1px; pointer-events: none; z-index: 95; opacity: 0.7;
+        }
+        @media (max-width: 768px) { .hide-mobile { display: none; } #fire-hint { display: none; } }
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Space Audio -->
+    <audio id="bg-music" loop>
+        <source src="https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3?filename=space-ambient-110058.mp3" type="audio/mpeg">
+    </audio>
+
+    <div id="loader">
+        <div style="font-size: 24px; font-family: 'Bebas Neue'; letter-spacing: 4px;">ESTABLISHING DEEP SPACE UPLINK</div>
+        <div style="margin-top: 10px;">DOWNLOADING TELEMETRY TEXTURES...</div>
+        <div id="loader-bar"><div id="loader-fill"></div></div>
+    </div>
+
+    <canvas id="webgl-canvas"></canvas>
+    <canvas id="cursor-canvas"></canvas>
+    <div class="flight-container"></div>
+
+    <div class="hud-overlay">
+        <div id="progress-bar"></div>
+        
+        <div class="top-bar">
+            <div><span style="color: var(--hud-white);">▲ AJ</span> | <span id="current-sector">// IN ORBIT — EARTH</span></div>
+            <div class="nav-links">
+                <span onclick="jumpTo(0.02)">HOME</span>
+                <span onclick="jumpTo(0.35)">ABOUT</span>
+                <span onclick="jumpTo(0.50)">PROJECTS</span>
+                <span onclick="jumpTo(0.68)">SKILLS</span>
+                <span onclick="jumpTo(0.85)">ACHIEVEMENTS</span>
+                <span onclick="jumpTo(1.0)">CONTACT</span>
+                <span id="scan-btn" class="hud-btn" onclick="toggleScanner()">[ SCAN ]</span>
+                <a href="Atharv_Joshi_Resume.pdf" class="resume-btn" target="_blank">RESUME</a>
+            </div>
+        </div>
+
+        <div class="telemetry-strip">
+            <div>[ VELOCITY: <span class="telemetry-data" id="tel-vel">0.00</span> LY/s ]</div>
+            <div class="hide-mobile">[ TARGET: <span class="telemetry-data" id="tel-target">NONE</span> ]</div>
+            <div style="display: flex; gap: 20px; align-items: center;">
+                <div id="audio-btn" class="audio-btn">[ ENABLE AUDIO & AI NARRATOR ]</div>
+                <div>[ COORD: <span class="telemetry-data" id="tel-coord">0, 0, 0</span> ]</div>
+            </div>
+        </div>
+        
+        <div id="panel-launch" class="hud-panel active">
+            <div class="mono-label">// AI · ROBOTICS · COMPUTER VISION</div>
+            <h1 class="title-bebas">ATHARV C. JOSHI</h1>
+            <div class="scroll-prompt">SYSTEM READY. SCROLL TO INITIATE LAUNCH BURST ↓</div>
+        </div>
+
+        <div id="panel-galaxy" class="hud-panel">
+            <h2 class="mono-label glow-gold" style="color: var(--galaxy-gold);">[ SIGNAL ACQUIRED ]</h2>
+            <h1 class="title-bebas">ATHARV C.<br>JOSHI</h1>
+            <p class="mono-label" style="color: var(--text-2); font-size: 14px; margin-top: 5px;">AI/ML Engineer — Robotics & Computer Vision</p>
+            <div class="typed-text"><span id="typed-output"></span></div>
+        </div>
+
+        <div id="panel-planet" class="hud-panel">
+            <div class="scan-card">
+                <div>┌─ SURFACE SCAN ────────────────────┐</div>
+                <div style="padding: 15px 0;">
+                    <div>DESIGNATION: <span class="val">ATHARV C. JOSHI</span></div>
+                    <div>CLASS: <span class="val">AI/ML ENGINEER</span></div>
+                    <hr>
+                    <div>CGPA ........ <span class="val">8.32 / 10</span></div>
+                    <div>INSTITUTION . <span class="val">D.Y. Patil Univ</span></div>
+                    <div>LOCATION .... <span class="val">Kolhapur, MH</span></div>
+                    <div>GRAD ETA .... <span class="val">MAY 2027</span></div>
+                    <div>STATUS ...... <span class="status">[● ACTIVE]</span></div>
+                </div>
+                <div>└───────────────────────────────────┘</div>
+            </div>
+            <div class="planet-bio">
+                I build systems that see, think, and move on their own. My rover navigates without human input. My health OS screens disease from images. My legal AI reads contracts. I don't prototype — I deploy.
+            </div>
+        </div>
+
+        <div id="station-card-1" class="station-card" style="top: 30%; left: 10%;">
+            <div class="bay-title">┌─ DOCKING BAY 01 ─────────── [● ACTIVE]</div>
+            <h3>AUTONOMOUS SURVEILLANCE ROVER</h3>
+            <div class="tech-stack">ROS2 · OpenCV · Raspberry Pi · Gazebo</div>
+            <ul>
+                <li>Full ROS2 nav stack with obstacle avoidance</li>
+                <li>Sensor fusion for terrain detection</li>
+                <li>Gazebo simulation to Pi deployment pipeline</li>
+            </ul>
+                <div class="deep-dive-btn" onclick="openDeepDive(0)">[ INITIATE DEEP DIVE ]</div>
+        </div>
+        <div id="station-card-2" class="station-card" style="top: 40%; right: 10%;">
+            <div class="bay-title">┌─ DOCKING BAY 02 ─────────── [● ACTIVE]</div>
+            <h3>SVASTHAAI — HEALTH OS</h3>
+            <div class="tech-stack">FastAPI · LangChain · ChromaDB · PyTorch · AWS</div>
+            <ul>
+                <li>AI health system across 5+ clinical domains</li>
+                <li>90%+ RAG accuracy for medical queries</li>
+                <li>Containerized Docker deployment with JWT auth</li>
+            </ul>
+                <div class="deep-dive-btn" onclick="openDeepDive(1)">[ INITIATE DEEP DIVE ]</div>
+        </div>
+        <div id="station-card-3" class="station-card" style="top: 50%; left: 10%;">
+            <div class="bay-title">┌─ DOCKING BAY 03 ─────────── [● ACTIVE]</div>
+            <h3>ALIS — LEGAL INTELLIGENCE</h3>
+            <div class="tech-stack">Legal-BERT · OCR · React · FastAPI</div>
+            <ul>
+                <li>Semantic legal search using tailored BERT</li>
+                <li>OCR contract analysis pipeline</li>
+                <li>Multilingual NLP document processing</li>
+            </ul>
+                <div class="deep-dive-btn" onclick="openDeepDive(2)">[ INITIATE DEEP DIVE ]</div>
+        </div>
+        <div id="station-card-4" class="station-card" style="top: 60%; right: 10%;">
+            <div class="bay-title">┌─ DOCKING BAY 04 ─────────── [● ACTIVE]</div>
+            <h3>IOT SMART MONITORING</h3>
+            <div class="tech-stack">ESP32 · Raspberry Pi · Cloud Dashboards</div>
+            <ul>
+                <li>Water quality and irrigation telemetry</li>
+                <li>Perimeter security sensor networks</li>
+                <li>Real-time cloud data visualization</li>
+            </ul>
+                <div class="deep-dive-btn" onclick="openDeepDive(3)">[ INITIATE DEEP DIVE ]</div>
+        </div>
+
+        <div id="asteroid-labels-container"></div>
+        <div id="asteroid-counter" class="mono-label" style="position: absolute; top: 100px; right: 40px; display: none;">CATALOGUED: <span id="ast-count">0</span> / 12</div>
+
+        <div id="panel-skills" class="hud-panel">
+            <div class="skills-container">
+                <h2>TECHNICAL ARSENAL</h2>
+                <div class="skill-group">
+                    <div class="title master">[●●●●●●] MASTERED</div>
+                    <div class="skill-list">
+                        <span class="skill-tag">Python</span>
+                        <span class="skill-tag">OpenCV</span>
+                        <span class="skill-tag">ROS2</span>
+                        <span class="skill-tag">FastAPI</span>
+                        <span class="skill-tag">Raspberry Pi</span>
+                        <span class="skill-tag">ESP32</span>
+                    </div>
+                </div>
+                <div class="skill-group">
+                    <div class="title prof">[●●●●○○] PROFICIENT</div>
+                    <div class="skill-list">
+                        <span class="skill-tag">PyTorch</span>
+                        <span class="skill-tag">LangChain</span>
+                        <span class="skill-tag">ChromaDB</span>
+                        <span class="skill-tag">Docker</span>
+                        <span class="skill-tag">React.js</span>
+                        <span class="skill-tag">AWS</span>
+                    </div>
+                </div>
+                <div class="skill-group">
+                    <div class="title">[●●○○○○] LEARNING</div>
+                    <div class="skill-list">
+                        <span class="skill-tag">TensorFlow</span>
+                        <span class="skill-tag">Gazebo Advanced</span>
+                        <span class="skill-tag">Kubernetes</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="ach-1" class="achievement-card" style="top: 30%; left: 20%;">
+            <div class="status">★ IGNITION COMPLETE</div>
+            <h3>2ND PLACE — ROVER DOMAIN</h3>
+            <p>MindSpark 2025 · COEP Pune</p>
+        </div>
+        <div id="ach-2" class="achievement-card" style="top: 50%; right: 20%;">
+            <div class="status">★ IGNITION COMPLETE</div>
+            <h3>13TH RANK NATIONWIDE</h3>
+            <p>RoboRun, Shaastra 2026 · IIT Madras</p>
+        </div>
+        <div id="ach-3" class="achievement-card" style="top: 70%; left: 30%;">
+            <div class="status">★ IGNITION COMPLETE</div>
+            <h3>WARRIOR OF THE YEAR</h3>
+            <p>Cyber Suraksha · Quick Heal Foundation</p>
+        </div>
+
+        <div id="panel-uplink" class="hud-panel">
+            <div class="uplink-terminal">
+                <div>┌─ DEEP SPACE UPLINK ──────────────────────────┐</div>
+                <div style="padding: 15px 0;">
+                    <div style="color: var(--text-2); margin-bottom: 10px;">$ establish_connection --target=earth<br>> Signal acquired. Ready to transmit.</div>
+                    
+                    <div style="display:flex; justify-content:space-between; margin: 5px 0;">
+                        <span>EMAIL</span>
+                        <a href="mailto:joshiatharv348@gmail.com">joshiatharv348@gmail.com</a>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin: 5px 0;">
+                        <span>PHONE</span>
+                        <a href="tel:+919302573730">+91 93025 73730</a>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin: 5px 0;">
+                        <span>GITHUB</span>
+                        <a href="https://github.com/atharv348" target="_blank">github.com/atharv348 ↗</a>
+                    </div>
+                </div>
+                <div style="border-top: 1px dashed var(--hud-cyan); padding-top: 15px;">
+                    <div>SUBJECT: ▋</div>
+                    <div class="uplink-btn" onclick="transmitData(this)">[ TRANSMIT ▶ ]</div>
+                </div>
+                <div style="margin-top: 15px;">└────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <div id="fire-hint">[ CLICK: FIRE LASERS ]&nbsp;&nbsp;[ RIGHT-CLICK / SCAN: WIREFRAME SCAN ]</div>
+    </div>
+
+    <div id="scan-sweep"></div>
+
+    <div id="deep-dive-modal">
+        <div class="dd-frame">
+            <div class="dd-close" onclick="closeDeepDive()">[ \u2715 CLOSE ]</div>
+            <div class="dd-tag" id="dd-tag">// DEEP DIVE</div>
+            <h2 id="dd-title">PROJECT</h2>
+            <div class="dd-stack" id="dd-stack"></div>
+            <p id="dd-desc"></p>
+            <div class="dd-tag" style="color:var(--hud-cyan);">// SYSTEM ARCHITECTURE</div>
+            <div class="dd-arch" id="dd-arch"></div>
+            <ul class="dd-feat" id="dd-feat"></ul>
+            <div class="dd-links" id="dd-links"></div>
+        </div>
+    </div>
+
+    <script>
+        /* ==========================================
+           1. AUDIO & AI NARRATOR (ASTRONOMER)
+           ========================================== */
+        let audioEnabled = false;
+        let lastAnnouncedSector = "";
+        const bgMusic = document.getElementById('bg-music');
+        const audioBtn = document.getElementById('audio-btn');
+        bgMusic.volume = 0.08;
+
+        function pickNarratorVoice() {
+            const voices = window.speechSynthesis.getVoices();
+            const preferredNames = [
+                "Microsoft David",
+                "Google UK English Male",
+                "Google US English",
+                "Alex",
+                "Daniel",
+                "Samantha"
+            ];
+
+            for (const name of preferredNames) {
+                const match = voices.find((voice) => voice.name.includes(name));
+                if (match) return match;
+            }
+
+            return (
+                voices.find((voice) => voice.lang.startsWith("en-GB")) ||
+                voices.find((voice) => voice.lang.startsWith("en-US")) ||
+                voices.find((voice) => voice.lang.startsWith("en")) ||
+                voices[0] ||
+                null
+            );
+        }
+
+        audioBtn.addEventListener('click', () => {
+            audioEnabled = !audioEnabled;
+            if (audioEnabled) {
+                bgMusic.play();
+                audioBtn.innerText = "[ MUTE AUDIO & AI ]";
+                audioBtn.style.color = "var(--hud-white)";
+                announce("Audio and AI narrator online. Systems nominal. Welcome to the orbital portfolio of Atharv C. Joshi.");
+            } else {
+                bgMusic.pause();
+                window.speechSynthesis.cancel();
+                audioBtn.innerText = "[ ENABLE AUDIO & AI ]";
+                audioBtn.style.color = "var(--hud-amber)";
+            }
+        });
+
+        function announce(text) {
+            if (!audioEnabled || !window.speechSynthesis) return;
+            window.speechSynthesis.cancel(); // Stop current speech
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.volume = 1;
+            utterance.pitch = 0.8; // Slightly deeper, authoritative
+            utterance.rate = 0.9;  // Measured pace
+
+            const preferredVoice = pickNarratorVoice();
+            if (preferredVoice) utterance.voice = preferredVoice;
+            
+            window.speechSynthesis.speak(utterance);
+        }
+
+        /* ==========================================
+           2. CORE THREE.JS SETUP
+           ========================================== */
+        const canvas = document.getElementById('webgl-canvas');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x00020a, 0.0015);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 10000);
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        
+        const ambientLight = new THREE.AmbientLight(0x2a5a9c, 0.4); 
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        directionalLight.position.set(100, 50, 100);
+        scene.add(directionalLight);
+        const astLight = new THREE.PointLight(0xffeedd, 1.2, 1200);
+        astLight.position.set(0, 50, -3100); 
+        scene.add(astLight);
+
+        /* ==========================================
+           3. TEXTURES & LOADERS
+           ========================================== */
+        const loadingManager = new THREE.LoadingManager();
+        const textureLoader = new THREE.TextureLoader(loadingManager);
+        textureLoader.setCrossOrigin('anonymous');
+
+        loadingManager.onProgress = (url, itemsLoaded, itemsTotal) => {
+            document.getElementById('loader-fill').style.width = (itemsLoaded / itemsTotal * 100) + '%';
+        };
+        loadingManager.onLoad = () => {
+            gsap.to('#loader', { opacity: 0, duration: 1, onComplete: () => {
+                document.getElementById('loader').style.display = 'none';
+                initScrollTrigger(); 
+            }});
+        };
+
+        const TEX = {
+            earthDay: textureLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_atmos_2048.jpg'),
+            earthSpec: textureLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_specular_2048.jpg'),
+            earthNorm: textureLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_normal_2048.jpg'),
+            earthClouds: textureLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_clouds_1024.png'),
+            moon: textureLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/moon_1024.jpg'),
+            rock: textureLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/terrain/backgrounddetailed6.jpg'),
+            galaxy: generateGalaxyTexture(),
+            nebula: generateNebulaTexture()
+        };
+        TEX.rock.wrapS = THREE.RepeatWrapping;
+        TEX.rock.wrapT = THREE.RepeatWrapping;
+        TEX.rock.repeat.set(2, 2);
+
+        /* ==========================================
+           4. ASTRONOMICAL BODIES & STATION
+           ========================================== */
+        
+        // Earth
+        function createEarth() {
+            const earthGroup = new THREE.Group();
+            const geo = new THREE.SphereGeometry(25, 64, 64);
+            const mat = new THREE.MeshPhongMaterial({ map: TEX.earthDay, specularMap: TEX.earthSpec, normalMap: TEX.earthNorm, shininess: 15 });
+            const earthMesh = new THREE.Mesh(geo, mat);
+            const cloudGeo = new THREE.SphereGeometry(25.4, 64, 64);
+            const cloudMat = new THREE.MeshPhongMaterial({ map: TEX.earthClouds, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false });
+            const cloudMesh = new THREE.Mesh(cloudGeo, cloudMat);
+            const glowGeo = new THREE.SphereGeometry(26.5, 32, 32);
+            const glowMat = new THREE.MeshBasicMaterial({ color: 0x9ee0ff, transparent: true, opacity: 0.15, blending: THREE.AdditiveBlending, side: THREE.BackSide });
+            const glowMesh = new THREE.Mesh(glowGeo, glowMat);
+            earthGroup.add(earthMesh); earthGroup.add(cloudMesh); earthGroup.add(glowMesh);
+            return { group: earthGroup, clouds: cloudMesh, mesh: earthMesh };
+        }
+        const earthStart = createEarth();
+        earthStart.group.position.set(0, -30, -50);
+        earthStart.group.rotation.y = Math.PI / 2;
+        scene.add(earthStart.group);
+        const earthEnd = createEarth();
+        earthEnd.group.position.set(0, -30, -5050);
+        earthEnd.group.rotation.y = -Math.PI / 4;
+        scene.add(earthEnd.group);
+
+        // Warp Starfield
+        const starsGeo = new THREE.BufferGeometry();
+        const starsCount = window.innerWidth > 768 ? 3000 : 1000;
+        const posArray = new Float32Array(starsCount * 3);
+        const colorArray = new Float32Array(starsCount * 3);
+        for(let i=0; i<starsCount*3; i+=3) {
+            posArray[i] = (Math.random() - 0.5) * 1000;
+            posArray[i+1] = (Math.random() - 0.5) * 1000;
+            posArray[i+2] = (Math.random() - 0.5) * 5000;
+            
+            const rand = Math.random();
+            if(rand > 0.8) { colorArray[i]=0.6; colorArray[i+1]=0.8; colorArray[i+2]=1; } // Ice Blue
+            else if(rand > 0.6) { colorArray[i]=0.8; colorArray[i+1]=0.6; colorArray[i+2]=0.9; } // Soft Purple
+            else { colorArray[i]=1; colorArray[i+1]=1; colorArray[i+2]=1; } // White
+        }
+        starsGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+        starsGeo.setAttribute('color', new THREE.BufferAttribute(colorArray, 3));
+        const starsMat = new THREE.PointsMaterial({ size: 1.5, vertexColors: true, transparent: true, opacity: 0.8 });
+        const starMesh = new THREE.Points(starsGeo, starsMat);
+        scene.add(starMesh);
+
+        // Galaxy
+        const galaxyGeo = new THREE.PlaneGeometry(800, 800);
+        const galaxyMat = new THREE.MeshBasicMaterial({ map: TEX.galaxy, transparent: true, blending: THREE.AdditiveBlending, opacity: 0.9, depthWrite: false });
+        const galaxyMesh = new THREE.Mesh(galaxyGeo, galaxyMat);
+        galaxyMesh.position.set(-80, 40, -1000);
+        galaxyMesh.lookAt(camera.position); 
+        scene.add(galaxyMesh);
+
+        // Planet & Moons
+        const planetSystem = new THREE.Group();
+        planetSystem.position.set(60, -20, -1700);
+        const pGeo = new THREE.SphereGeometry(30, 64, 64);
+        const pMat = new THREE.MeshPhongMaterial({ map: TEX.earthDay, normalMap: TEX.earthNorm, color: 0x8aa8c2 });
+        const pMesh = new THREE.Mesh(pGeo, pMat);
+        const pLight = new THREE.PointLight(0x4cd2ff, 1, 200);
+        pLight.position.set(-50, 20, 50);
+        planetSystem.add(pMesh); planetSystem.add(pLight);
+        const moonGeo = new THREE.SphereGeometry(3, 32, 32);
+        const moonMat = new THREE.MeshPhongMaterial({ map: TEX.moon });
+        const moons = [];
+        for(let i=0; i<3; i++) {
+            const moon = new THREE.Mesh(moonGeo, moonMat);
+            const dist = 50 + (i * 15);
+            const angle = (Math.PI * 2 / 3) * i;
+            moon.position.set(Math.cos(angle)*dist, Math.sin(angle)*10, Math.sin(angle)*dist);
+            moons.push({ mesh: moon, angle, dist });
+            planetSystem.add(moon);
+        }
+        scene.add(planetSystem);
+
+        // ==========================================
+        // REDESIGNED ORBITAL SPACE STATION
+        // ==========================================
+        const station = new THREE.Group();
+        station.position.set(-60, 40, -2400);
+
+        const stnMat = new THREE.MeshStandardMaterial({ color: 0x4b6887, metalness: 0.8, roughness: 0.2 });
+        const emissiveMat = new THREE.MeshBasicMaterial({ color: 0x4cd2ff }); // Neon Cyan
+
+        // Central Core
+        const coreGeo = new THREE.CylinderGeometry(5, 5, 40, 32);
+        const core = new THREE.Mesh(coreGeo, stnMat);
+        core.rotation.x = Math.PI / 2;
+        station.add(core);
+
+        // Twin Habitat Rings
+        const habRingGeo = new THREE.TorusGeometry(12, 1.5, 32, 64);
+        const ring1 = new THREE.Mesh(habRingGeo, stnMat);
+        ring1.position.z = -10;
+        station.add(ring1);
+        const ring2 = new THREE.Mesh(habRingGeo, stnMat);
+        ring2.position.z = 10;
+        station.add(ring2);
+
+        // Massive Solar Panels
+        const panelGeo = new THREE.BoxGeometry(40, 0.5, 8);
+        const panelMat = new THREE.MeshStandardMaterial({ color: 0x102040, metalness: 1.0, roughness: 0.1 });
+        const panel1 = new THREE.Mesh(panelGeo, panelMat);
+        panel1.position.set(0, 15, 0);
+        station.add(panel1);
+        const panel2 = new THREE.Mesh(panelGeo, panelMat);
+        panel2.position.set(0, -15, 0);
+        station.add(panel2);
+
+        // Docking Bays (Extended arms)
+        const armGeo = new THREE.CylinderGeometry(1.5, 1.5, 15, 16);
+        const dockLights = [];
+        const armOffsets = [
+            { x: 15, y: 0, z: -15, rx: 0, ry: 0, rz: Math.PI/2 }, // Bay 1
+            { x: -15, y: 0, z: -5, rx: 0, ry: 0, rz: Math.PI/2 }, // Bay 2
+            { x: 0, y: 15, z: 5, rx: 0, ry: 0, rz: 0 },          // Bay 3
+            { x: 0, y: -15, z: 15, rx: 0, ry: 0, rz: 0 }         // Bay 4
+        ];
+        
+        armOffsets.forEach((pos, index) => {
+            const arm = new THREE.Mesh(armGeo, stnMat);
+            arm.position.set(pos.x, pos.y, pos.z); 
+            arm.rotation.set(pos.rx, pos.ry, pos.rz);
+            station.add(arm);
+            
+            // Glowing docking ring at the end of each arm
+            const dockRingGeo = new THREE.TorusGeometry(2, 0.2, 16, 32);
+            const dockRing = new THREE.Mesh(dockRingGeo, emissiveMat);
+            if (pos.rx === 0 && pos.ry === 0 && pos.rz === 0) {
+                // Vertical arms
+                dockRing.rotation.x = Math.PI/2;
+                dockRing.position.set(pos.x, pos.y > 0 ? pos.y + 7.5 : pos.y - 7.5, pos.z);
+            } else {
+                // Horizontal arms
+                dockRing.rotation.y = Math.PI/2;
+                dockRing.position.set(pos.x > 0 ? pos.x + 7.5 : pos.x - 7.5, pos.y, pos.z);
+            }
+            station.add(dockRing);
+
+            const light = new THREE.PointLight(0xff4b4b, 2, 50);
+            light.position.copy(dockRing.position);
+            station.add(light); 
+            dockLights.push(light);
+        });
+        scene.add(station);
+
+        // Asteroids
+        const astCount = window.innerWidth > 768 ? 80 : 30;
+        const astGeo = new THREE.IcosahedronGeometry(4, 2); 
+        const posAttr = astGeo.attributes.position;
+        for(let i=0; i<posAttr.count; i++) {
+            const noise = 1 + (Math.random() * 0.4 - 0.2);
+            posAttr.setXYZ(i, posAttr.getX(i)*noise, posAttr.getY(i)*noise, posAttr.getZ(i)*noise);
+        }
+        astGeo.computeVertexNormals();
+        const astMat = new THREE.MeshStandardMaterial({ map: TEX.rock, color: 0x666666, roughness: 0.9, metalness: 0.1 });
+        const asteroidMesh = new THREE.InstancedMesh(astGeo, astMat, astCount);
+        const dummy = new THREE.Object3D();
+        const asteroidData = []; 
+        const astAll = []; // per-instance physics for drift + tumble + shatter
+        const skills = ["Python", "OpenCV", "ROS2", "FastAPI", "Raspberry Pi", "ESP32", "PyTorch", "LangChain", "ChromaDB", "Docker", "React.js", "AWS"];
+        for(let i=0; i<astCount; i++) {
+            const x = (Math.random() - 0.5) * 150; const y = (Math.random() - 0.5) * 100; const z = -2900 - (Math.random() * 600);
+            const scale = 0.5 + Math.random() * 2;
+            astAll.push({
+                pos: new THREE.Vector3(x, y, z),
+                rot: new THREE.Euler(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI),
+                rotSpeed: new THREE.Vector3((Math.random()-0.5)*0.01, (Math.random()-0.5)*0.01, (Math.random()-0.5)*0.01),
+                drift: new THREE.Vector3((Math.random()-0.5)*0.03, (Math.random()-0.5)*0.03, (Math.random()-0.5)*0.03),
+                home: new THREE.Vector3(x, y, z),
+                scale: scale, alive: true
+            });
+            dummy.position.set(x, y, z); dummy.rotation.copy(astAll[i].rot);
+            dummy.scale.set(scale, scale, scale); dummy.updateMatrix();
+            asteroidMesh.setMatrixAt(i, dummy.matrix);
+            if (i < skills.length) {
+                asteroidData.push({ id: i, pos: new THREE.Vector3(x,y,z), skill: skills[i], type: i < 6 ? 'mastered' : 'proficient', scanned: false });
+            }
+        }
+        asteroidMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        scene.add(asteroidMesh);
+
+        // Nebula & Proto-stars
+        const nebulaGeo = new THREE.PlaneGeometry(1000, 600);
+        const nebulaMat = new THREE.MeshBasicMaterial({ map: TEX.nebula, transparent: true, blending: THREE.AdditiveBlending, opacity: 0.8, depthWrite: false });
+        const nebulaMesh = new THREE.Mesh(nebulaGeo, nebulaMat);
+        nebulaMesh.position.set(60, 0, -4300); nebulaMesh.lookAt(camera.position);
+        scene.add(nebulaMesh);
+
+        const protoStars = [
+            { pos: new THREE.Vector3(20, 20, -4100), light: null, active: false, id: 'ach-1' },
+            { pos: new THREE.Vector3(80, 0, -4250), light: null, active: false, id: 'ach-2' },
+            { pos: new THREE.Vector3(40, -30, -4400), light: null, active: false, id: 'ach-3' }
+        ];
+        const starGeo = new THREE.BufferGeometry();
+        starGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0,0,0]), 3));
+        const starMat = new THREE.PointsMaterial({ size: 10, color: 0xffb454, map: generateGlowTexture(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+        protoStars.forEach(star => {
+            const l = new THREE.PointLight(0xffb454, 0, 300); l.position.copy(star.pos);
+            const sprite = new THREE.Points(starGeo, starMat.clone()); sprite.material.opacity = 0.1;
+            l.add(sprite); scene.add(l); star.light = l; star.sprite = sprite;
+        });
+
+        /* ==========================================
+           5. FLIGHT PATH
+           ========================================== */
+        const flightPoints = [
+            new THREE.Vector3(0, 0, 0),          
+            new THREE.Vector3(10, 5, -100),      
+            new THREE.Vector3(20, 10, -300),     
+            new THREE.Vector3(-30, 20, -700),    
+            new THREE.Vector3(-60, 35, -950),    
+            new THREE.Vector3(-20, 10, -1200),   
+            new THREE.Vector3(30, -5, -1500),    
+            new THREE.Vector3(80, -10, -1700),   
+            new THREE.Vector3(20, 10, -2000),    
+            new THREE.Vector3(-40, 35, -2300),   
+            new THREE.Vector3(-55, 45, -2380),   
+            new THREE.Vector3(-75, 40, -2400),   
+            new THREE.Vector3(-60, 55, -2420),   
+            new THREE.Vector3(-45, 20, -2440),   
+            new THREE.Vector3(20, -10, -2700),   
+            new THREE.Vector3(40, 20, -3000),    
+            new THREE.Vector3(-30, -10, -3200),  
+            new THREE.Vector3(20, 15, -3400),    
+            new THREE.Vector3(0, 0, -3800),      
+            new THREE.Vector3(30, 10, -4150),    
+            new THREE.Vector3(70, 0, -4280),     
+            new THREE.Vector3(45, -15, -4400),   
+            new THREE.Vector3(0, 0, -4700),      
+            new THREE.Vector3(0, 0, -5000),      
+        ];
+        const flightCurve = new THREE.CatmullRomCurve3(flightPoints, false, 'catmullrom', 0.5);
+
+        /* ==========================================
+           6. MICRO 3D ROCKET CURSOR
+           ========================================== */
+        const cursorScene = new THREE.Scene();
+        const cursorCam = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 100);
+        cursorCam.position.z = 8; 
+        const cursorRendererT = new THREE.WebGLRenderer({ canvas: document.getElementById('cursor-canvas'), alpha: true, antialias: true });
+        cursorRendererT.setSize(window.innerWidth, window.innerHeight);
+
+        const cursorLight = new THREE.DirectionalLight(0xffffff, 2.5); cursorLight.position.set(5, 10, 5); cursorScene.add(cursorLight);
+        const cursorAmb = new THREE.AmbientLight(0x404040, 1.5); cursorScene.add(cursorAmb);
+
+        const shipGroup = new THREE.Group();
+        shipGroup.scale.set(0.35, 0.35, 0.35); // EVEN SMALLER AS REQUESTED
+
+        const hullMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 0.3, roughness: 0.4 });
+        const darkMetalMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.6, roughness: 0.5 });
+        
+        const bodyGeo = new THREE.CylinderGeometry(0.3, 0.45, 1.0, 32); bodyGeo.rotateX(Math.PI/2);
+        shipGroup.add(new THREE.Mesh(bodyGeo, hullMat));
+
+        const noseGeo = new THREE.SphereGeometry(0.3, 32, 16, 0, Math.PI*2, 0, Math.PI/2);
+        noseGeo.rotateX(-Math.PI/2); noseGeo.translate(0, 0, -0.5);
+        const noseMesh = new THREE.Mesh(noseGeo, darkMetalMat); noseMesh.scale.set(1, 1, 1.2);
+        shipGroup.add(noseMesh);
+
+        const wingGeo = new THREE.BoxGeometry(1.5, 0.05, 0.4); wingGeo.translate(0, 0, 0.2);
+        shipGroup.add(new THREE.Mesh(wingGeo, hullMat));
+
+        const nozzleGeo = new THREE.CylinderGeometry(0.25, 0.4, 0.4, 32); nozzleGeo.rotateX(Math.PI/2); nozzleGeo.translate(0, 0, 0.6);
+        shipGroup.add(new THREE.Mesh(nozzleGeo, darkMetalMat));
+
+        const engineLight = new THREE.PointLight(0xffeebb, 3, 10); engineLight.position.set(0, 0, 1.0);
+        shipGroup.add(engineLight);
+        cursorScene.add(shipGroup);
+
+        const trails = [];
+        const trailMat = new THREE.MeshBasicMaterial({ color: 0xffaa44, transparent: true, opacity: 0.9 });
+        const trailGeo = new THREE.PlaneGeometry(0.08, 0.08);
+
+        let mouseX = 0, mouseY = 0; let targetMouseX = 0, targetMouseY = 0; let steerX = 0; let steerY = 0;
+        if (window.innerWidth > 768) {
+            document.addEventListener('mousemove', (e) => {
+                targetMouseX = (e.clientX / window.innerWidth) * 2 - 1;
+                targetMouseY = -(e.clientY / window.innerHeight) * 2 + 1;
+                steerX += (targetMouseX * 0.05 - steerX) * 0.1;
+                steerY += (targetMouseY * 0.05 - steerY) * 0.1;
+            });
+        }
+
+        /* ==========================================
+           7. GSAP SCROLL & LOGIC
+           ========================================== */
+        const state = { t: 0 };
+        function initScrollTrigger() {
+            gsap.to(state, { t: 1, ease: "none", scrollTrigger: { trigger: ".flight-container", start: "top top", end: "bottom bottom", scrub: 0.5 } });
+            new Typed('#typed-output', { strings: ['Building autonomous rovers.', 'Designing AI health systems.', 'Shipping RAG pipelines.', 'Winning at IIT Madras.'], typeSpeed: 40, backSpeed: 30, backDelay: 2000, loop: true, showCursor: true });
+        }
+        function togglePanel(id, condition) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if(condition && !el.classList.contains('active')) el.classList.add('active');
+            else if(!condition && el.classList.contains('active')) el.classList.remove('active');
+        }
+
+        let lastT = 0;
+        let scannedAsteroids = 0;
+        
+        function updateHUD(t, pos) {
+            const vel = Math.abs(t - lastT) * 10000;
+            document.getElementById('tel-vel').innerText = vel.toFixed(2);
+            document.getElementById('tel-coord').innerText = `${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(0)}`;
+            document.getElementById('progress-bar').style.width = (t * 100) + '%';
+            lastT = t;
+
+            let sector = "// IN TRANSIT"; let target = "NONE";
+
+            togglePanel('panel-launch', t < 0.02);
+            
+            if(t > 0.10 && t < 0.22) { sector = "SPIRAL GALAXY"; target = "GALAXY CORE"; if(lastAnnouncedSector !== sector) { announce("Signal acquired. Approaching Galaxy core. Profiling capabilities."); lastAnnouncedSector = sector; } }
+            togglePanel('panel-galaxy', t > 0.12 && t < 0.20);
+
+            if(t > 0.28 && t < 0.38) { sector = "PLANETARY BODY"; target = "SURFACE SCAN"; if(lastAnnouncedSector !== sector) { announce("Entering planetary orbit. Surface scan complete."); lastAnnouncedSector = sector; } }
+            togglePanel('panel-planet', t > 0.30 && t < 0.36);
+
+            if(t > 0.42 && t < 0.55) { sector = "ORBITAL STATION"; target = "STATION MODULES"; if(lastAnnouncedSector !== sector) { announce("Approaching Orbital Station. Docking sequence engaged for project analysis."); lastAnnouncedSector = sector; } }
+            togglePanel('station-card-1', t > 0.44 && t < 0.46);
+            togglePanel('station-card-2', t > 0.47 && t < 0.49);
+            togglePanel('station-card-3', t > 0.50 && t < 0.52);
+            togglePanel('station-card-4', t > 0.53 && t < 0.55);
+
+            if(t > 0.58 && t < 0.72) { sector = "ASTEROID FIELD"; target = "TECHNICAL ARSENAL"; document.getElementById('asteroid-counter').style.display = 'block'; if(lastAnnouncedSector !== sector) { announce("Navigating asteroid field. Scanning technical arsenal and masteries."); lastAnnouncedSector = sector; } }
+            else { document.getElementById('asteroid-counter').style.display = 'none'; }
+            togglePanel('panel-skills', t > 0.60 && t < 0.70);
+
+            if(t > 0.78 && t < 0.90) { sector = "STELLAR NURSERY"; target = "PROTO-STARS"; if(lastAnnouncedSector !== sector) { announce("Entering Stellar Nursery. Detecting high-energy achievement signatures."); lastAnnouncedSector = sector; } }
+            
+            if(t > 0.95) { sector = "EARTH (RETURN)"; target = "UPLINK RELAY"; if(lastAnnouncedSector !== sector) { announce("Final approach to Earth. Deep space uplink established. Ready to transmit."); lastAnnouncedSector = sector; } }
+            togglePanel('panel-uplink', t > 0.97);
+
+            document.getElementById('current-sector').innerText = `// ${sector}`;
+            document.getElementById('tel-target').innerText = target;
+        }
+
+
+        /* ==========================================
+           E1. CINEMATIC POST-PROCESSING
+           ========================================== */
+        let composer = null, bloomPass = null, filmPass = null, chromaPass = null, USE_COMPOSER = false;
+        try {
+            if (THREE.EffectComposer && THREE.UnrealBloomPass && THREE.RenderPass) {
+                composer = new THREE.EffectComposer(renderer);
+                composer.addPass(new THREE.RenderPass(scene, camera));
+
+                bloomPass = new THREE.UnrealBloomPass(
+                    new THREE.Vector2(window.innerWidth, window.innerHeight),
+                    1.15, 0.65, 0.55
+                );
+                composer.addPass(bloomPass);
+
+                if (THREE.FilmPass) {
+                    filmPass = new THREE.FilmPass(0.28, 0.22, 720, false);
+                    composer.addPass(filmPass);
+                }
+
+                // Chromatic aberration (cockpit-cam edge color shift)
+                const ChromaShader = {
+                    uniforms: {
+                        tDiffuse: { value: null },
+                        amount: { value: 0.0016 },
+                        time: { value: 0 }
+                    },
+                    vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+                    fragmentShader: [
+                        'uniform sampler2D tDiffuse;',
+                        'uniform float amount;',
+                        'uniform float time;',
+                        'varying vec2 vUv;',
+                        'void main(){',
+                        '  vec2 dir = vUv - 0.5;',
+                        '  float d = dot(dir, dir);',
+                        '  float a = amount * (0.4 + d * 3.0);',
+                        '  vec2 off = dir * a;',
+                        '  float r = texture2D(tDiffuse, vUv + off).r;',
+                        '  float g = texture2D(tDiffuse, vUv).g;',
+                        '  float b = texture2D(tDiffuse, vUv - off).b;',
+                        '  float vig = smoothstep(0.95, 0.35, d);',
+                        '  gl_FragColor = vec4(vec3(r,g,b) * (0.55 + 0.45*vig), 1.0);',
+                        '}'
+                    ].join('\n')
+                };
+                chromaPass = new THREE.ShaderPass(ChromaShader);
+                chromaPass.renderToScreen = true;
+                composer.addPass(chromaPass);
+
+                USE_COMPOSER = true;
+            }
+        } catch (err) { console.warn('Post-processing unavailable, falling back to standard render', err); USE_COMPOSER = false; }
+
+        /* ==========================================
+           E2. SCANNER MODE (holographic wireframe)
+           ========================================== */
+        let scannerOn = false;
+        const scanWires = [];
+        // planet wireframe
+        const planetWire = new THREE.Mesh(
+            new THREE.SphereGeometry(31, 24, 24),
+            new THREE.MeshBasicMaterial({ color: 0x4cd2ff, wireframe: true, transparent: true, opacity: 0.5 })
+        );
+        planetWire.visible = false; pMesh.add(planetWire); scanWires.push(planetWire);
+        // station wireframe (core + rings + bounding cage)
+        const stationWire = new THREE.Mesh(
+            new THREE.CylinderGeometry(13, 13, 46, 16, 1, true),
+            new THREE.MeshBasicMaterial({ color: 0x4cd2ff, wireframe: true, transparent: true, opacity: 0.45 })
+        );
+        stationWire.rotation.x = Math.PI / 2; stationWire.visible = false; station.add(stationWire); scanWires.push(stationWire);
+        const stationCage = new THREE.Mesh(
+            new THREE.IcosahedronGeometry(30, 1),
+            new THREE.MeshBasicMaterial({ color: 0xa3d9f5, wireframe: true, transparent: true, opacity: 0.18 })
+        );
+        stationCage.visible = false; station.add(stationCage); scanWires.push(stationCage);
+
+        function toggleScanner() {
+            scannerOn = !scannerOn;
+            scanWires.forEach(w => w.visible = scannerOn);
+            document.getElementById('scan-sweep').classList.toggle('on', scannerOn);
+            document.getElementById('scan-btn').classList.toggle('on', scannerOn);
+            if (scannerOn) announce('Scanner online. Casting holographic survey grid. Revealing structural geometry.');
+        }
+        window.addEventListener('contextmenu', (e) => { e.preventDefault(); toggleScanner(); });
+
+        /* ==========================================
+           E3. LASER CANNONS + ASTEROID SHATTER
+           ========================================== */
+        const laserBolts = [];
+        const fragments = [];
+        const laserRay = new THREE.Raycaster();
+        const fragGeo = new THREE.IcosahedronGeometry(1.2, 0);
+        const fragMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.9, metalness: 0.1 });
+
+        function shatterAsteroid(id, point) {
+            if (id == null || !astAll[id] || !astAll[id].alive) return;
+            astAll[id].alive = false;
+            // collapse the instance
+            dummy.position.set(0, 0, -99999); dummy.scale.set(0.0001, 0.0001, 0.0001); dummy.rotation.set(0,0,0); dummy.updateMatrix();
+            asteroidMesh.setMatrixAt(id, dummy.matrix); asteroidMesh.instanceMatrix.needsUpdate = true;
+            // spawn fragments
+            const baseScale = astAll[id].scale;
+            for (let k = 0; k < 6; k++) {
+                const frag = new THREE.Mesh(fragGeo, fragMat.clone());
+                frag.position.copy(point);
+                const s = baseScale * (0.25 + Math.random() * 0.4);
+                frag.scale.set(s, s, s);
+                frag.userData = {
+                    vel: new THREE.Vector3((Math.random()-0.5)*2.2, (Math.random()-0.5)*2.2, (Math.random()-0.5)*2.2),
+                    rot: new THREE.Vector3((Math.random()-0.5)*0.3, (Math.random()-0.5)*0.3, (Math.random()-0.5)*0.3),
+                    life: 1.0
+                };
+                scene.add(frag); fragments.push(frag);
+            }
+            const flash = new THREE.PointLight(0x4cd2ff, 6, 120); flash.position.copy(point); scene.add(flash);
+            gsap.to(flash, { intensity: 0, duration: 0.5, onComplete: () => scene.remove(flash) });
+        }
+
+        function fireLaser(ndcX, ndcY) {
+            laserRay.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera);
+            const dir = laserRay.ray.direction.clone().normalize();
+            const start = camera.position.clone().add(dir.clone().multiplyScalar(3));
+            const bolt = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.12, 0.12, 7, 8),
+                new THREE.MeshBasicMaterial({ color: 0x6fe0ff })
+            );
+            bolt.position.copy(start);
+            bolt.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+            bolt.userData = { dir: dir, life: 1.4 };
+            scene.add(bolt); laserBolts.push(bolt);
+            // hit test against asteroids
+            const hits = laserRay.intersectObject(asteroidMesh);
+            if (hits.length && hits[0].instanceId != null) {
+                shatterAsteroid(hits[0].instanceId, hits[0].point);
+            }
+        }
+
+        window.addEventListener('click', (e) => {
+            if (e.target.closest('.top-bar, .telemetry-strip, .station-card, .uplink-terminal, #deep-dive-modal, a, .hud-btn, .deep-dive-btn')) return;
+            const nx = (e.clientX / window.innerWidth) * 2 - 1;
+            const ny = -(e.clientY / window.innerHeight) * 2 + 1;
+            fireLaser(nx, ny);
+        });
+
+        /* ==========================================
+           E4. GYROSCOPE STEERING (mobile)
+           ========================================== */
+        let gyroActive = false;
+        function enableGyro() {
+            if (gyroActive) return;
+            const start = () => {
+                gyroActive = true;
+                window.addEventListener('deviceorientation', (e) => {
+                    const gx = (e.gamma || 0) / 40;          // left/right tilt
+                    const gy = ((e.beta || 0) - 35) / 40;    // forward/back tilt
+                    steerX += (THREE.MathUtils.clamp(gx, -1, 1) * 0.06 - steerX) * 0.08;
+                    steerY += (THREE.MathUtils.clamp(-gy, -1, 1) * 0.06 - steerY) * 0.08;
+                });
+            };
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission().then(s => { if (s === 'granted') start(); }).catch(() => {});
+            } else if (typeof DeviceOrientationEvent !== 'undefined') { start(); }
+        }
+        if ('ontouchstart' in window) { window.addEventListener('touchstart', enableGyro, { once: true }); }
+
+        /* ==========================================
+           E5. HOLOGRAPHIC PROJECT DEEP DIVES
+           ========================================== */
+        const deepDives = [
+            {
+                tag: '// DOCKING BAY 01 \u00b7 ROBOTICS',
+                title: 'AUTONOMOUS SURVEILLANCE ROVER',
+                stack: 'ROS2 \u00b7 OpenCV \u00b7 Raspberry Pi \u00b7 Gazebo',
+                desc: 'A fully autonomous ground rover that perceives, plans, and navigates unknown terrain with zero human input \u2014 simulated in Gazebo, then deployed to real hardware on a Raspberry Pi.',
+                arch: '[ Camera + LiDAR ] -> [ Sensor Fusion ] -> [ ROS2 nav2 stack ]\n        |                                  |\n   [ OpenCV CV ]                    [ Costmap + Planner ]\n        |                                  |\n        +-------> [ Obstacle Avoidance ] --+--> [ Motor Control / Pi ]',
+                feats: ['Full ROS2 nav stack with real-time obstacle avoidance', 'Sensor fusion for terrain & depth detection', 'Gazebo simulation -> Raspberry Pi deployment pipeline'],
+                links: [['GitHub', 'https://github.com/atharv348']]
+            },
+            {
+                tag: '// DOCKING BAY 02 \u00b7 HEALTH AI',
+                title: 'SVASTHAAI \u2014 HEALTH OS',
+                stack: 'FastAPI \u00b7 LangChain \u00b7 ChromaDB \u00b7 PyTorch \u00b7 AWS',
+                desc: 'An AI health operating system spanning 5+ clinical domains, combining retrieval-augmented generation with vision models to screen disease from images and answer medical queries with 90%+ accuracy.',
+                arch: '[ Client ] -> [ FastAPI Gateway + JWT ]\n                     |\n        +------------+------------+\n        |            |            |\n  [ LangChain ]  [ PyTorch ]  [ ChromaDB RAG ]\n        |            |            |\n        +-----> [ Dockerized services on AWS ] <-----+',
+                feats: ['AI health system across 5+ clinical domains', '90%+ RAG accuracy for medical queries', 'Containerized Docker deployment with JWT auth'],
+                links: [['GitHub', 'https://github.com/atharv348']]
+            },
+            {
+                tag: '// DOCKING BAY 03 \u00b7 LEGAL NLP',
+                title: 'ALIS \u2014 LEGAL INTELLIGENCE',
+                stack: 'Legal-BERT \u00b7 OCR \u00b7 React \u00b7 FastAPI',
+                desc: 'A legal-document intelligence platform that reads, understands, and semantically searches contracts across multiple languages using a tailored Legal-BERT model and an OCR ingestion pipeline.',
+                arch: '[ PDF / Scan ] -> [ OCR Pipeline ] -> [ Text Normalizer ]\n                                        |\n                              [ Legal-BERT Embeddings ]\n                                        |\n               [ Semantic Vector Search ] -> [ React UI / FastAPI ]',
+                feats: ['Semantic legal search using tailored BERT', 'OCR contract analysis pipeline', 'Multilingual NLP document processing'],
+                links: [['GitHub', 'https://github.com/atharv348']]
+            },
+            {
+                tag: '// DOCKING BAY 04 \u00b7 IOT',
+                title: 'IOT SMART MONITORING',
+                stack: 'ESP32 \u00b7 Raspberry Pi \u00b7 Cloud Dashboards',
+                desc: 'A distributed IoT sensor network for environmental and security telemetry \u2014 streaming water quality, irrigation, and perimeter data to real-time cloud dashboards.',
+                arch: '[ ESP32 Sensors ] --MQTT--> [ Raspberry Pi Edge Gateway ]\n                                       |\n                            [ Cloud Ingest + Storage ]\n                                       |\n                        [ Real-time Dashboard / Alerts ]',
+                feats: ['Water quality and irrigation telemetry', 'Perimeter security sensor networks', 'Real-time cloud data visualization'],
+                links: [['GitHub', 'https://github.com/atharv348']]
+            }
+        ];
+        function openDeepDive(i) {
+            const d = deepDives[i]; if (!d) return;
+            document.getElementById('dd-tag').textContent = d.tag;
+            document.getElementById('dd-title').textContent = d.title;
+            document.getElementById('dd-stack').textContent = d.stack;
+            document.getElementById('dd-desc').textContent = d.desc;
+            document.getElementById('dd-arch').textContent = d.arch;
+            document.getElementById('dd-feat').innerHTML = d.feats.map(f => '<li>' + f + '</li>').join('');
+            document.getElementById('dd-links').innerHTML = d.links.map(l => '<a href="' + l[1] + '" target="_blank">' + l[0] + ' \u2197</a>').join('');
+            const m = document.getElementById('deep-dive-modal');
+            m.classList.add('active');
+            document.body.style.overflow = 'hidden'; // pause the flight
+            deepDiveOpen = true;
+            announce('Initiating deep dive. Rendering system architecture for ' + d.title + '.');
+        }
+        function closeDeepDive() {
+            document.getElementById('deep-dive-modal').classList.remove('active');
+            document.body.style.overflow = '';
+            deepDiveOpen = false;
+        }
+        let deepDiveOpen = false;
+        window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDeepDive(); });
+
+        /* ==========================================
+           E6. DYNAMIC LIGHTING TARGETS
+           ========================================== */
+        const ambBase = new THREE.Color(0x2a5a9c);
+        const ambGold = new THREE.Color(0xf2a65a);
+        const ambMagenta = new THREE.Color(0xd66487);
+        const dirBase = new THREE.Color(0xffffff);
+        const dirGold = new THREE.Color(0xffd9a0);
+        const dirMagenta = new THREE.Color(0xffb0d0);
+
+        /* ==========================================
+           8. ANIMATION LOOP
+           ========================================== */
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = clock.getDelta();
+            const time = clock.elapsedTime;
+
+            const pos = flightCurve.getPointAt(state.t);
+            const lookAhead = flightCurve.getPointAt(Math.min(state.t + 0.01, 1));
+            camera.position.copy(pos); camera.lookAt(lookAhead);
+            
+            const tangent = flightCurve.getTangentAt(state.t);
+            camera.rotation.z += tangent.x * 0.3; camera.rotation.y += steerX; camera.rotation.x += steerY;
+
+            earthStart.clouds.rotation.y += 0.0005; earthStart.mesh.rotation.y += 0.0002;
+            earthEnd.clouds.rotation.y += 0.0005; earthEnd.mesh.rotation.y += 0.0002;
+            galaxyMesh.rotation.z = time * 0.02; 
+            planetSystem.rotation.y = time * 0.05;
+            moons.forEach(m => { m.angle += 0.01; m.mesh.position.set(Math.cos(m.angle)*m.dist, Math.sin(m.angle)*10, Math.sin(m.angle)*m.dist); });
+
+            // Rotating the giant station rings slowly
+            station.children[1].rotation.z = time * 0.1; // ring 1
+            station.children[2].rotation.z = -time * 0.1; // ring 2
+
+            // Solar panels track the distant light source
+            const sunDir = Math.sin(time * 0.15);
+            panel1.rotation.y = sunDir * 0.5; panel2.rotation.y = sunDir * 0.5;
+            panel1.rotation.z = Math.cos(time * 0.15) * 0.15; panel2.rotation.z = Math.cos(time * 0.15) * 0.15;
+            stationCage.rotation.y = time * 0.05; stationCage.rotation.x = time * 0.03;
+
+            // Asteroid drift + chaotic tumble
+            if (state.t > 0.45 && state.t < 0.82) {
+                for (let i = 0; i < astAll.length; i++) {
+                    const a = astAll[i];
+                    if (!a.alive) continue;
+                    a.rot.x += a.rotSpeed.x; a.rot.y += a.rotSpeed.y; a.rot.z += a.rotSpeed.z;
+                    a.pos.x = a.home.x + Math.sin(time * 0.3 + i) * 4 + a.drift.x * time * 6;
+                    a.pos.y = a.home.y + Math.cos(time * 0.25 + i) * 3 + a.drift.y * time * 6;
+                    a.pos.z = a.home.z + Math.sin(time * 0.2 + i * 0.5) * 4;
+                    dummy.position.copy(a.pos); dummy.rotation.copy(a.rot);
+                    dummy.scale.set(a.scale, a.scale, a.scale); dummy.updateMatrix();
+                    asteroidMesh.setMatrixAt(i, dummy.matrix);
+                    if (i < asteroidData.length) asteroidData[i].pos.copy(a.pos);
+                }
+                asteroidMesh.instanceMatrix.needsUpdate = true;
+            }
+
+            // Laser bolts
+            for (let i = laserBolts.length - 1; i >= 0; i--) {
+                const b = laserBolts[i];
+                b.position.add(b.userData.dir.clone().multiplyScalar(12));
+                b.userData.life -= 0.03;
+                if (b.userData.life <= 0) { scene.remove(b); laserBolts.splice(i, 1); }
+            }
+            // Asteroid fragments
+            for (let i = fragments.length - 1; i >= 0; i--) {
+                const f = fragments[i];
+                f.position.add(f.userData.vel);
+                f.rotation.x += f.userData.rot.x; f.rotation.y += f.userData.rot.y; f.rotation.z += f.userData.rot.z;
+                f.userData.vel.multiplyScalar(0.96);
+                f.userData.life -= 0.018;
+                f.scale.multiplyScalar(0.985);
+                if (f.userData.life <= 0) { scene.remove(f); fragments.splice(i, 1); }
+            }
+
+            // Dynamic lighting: warm gold near galaxy, magenta in the nebula
+            let ambTarget = ambBase, dirTarget = dirBase;
+            if (state.t > 0.08 && state.t < 0.26) { ambTarget = ambGold; dirTarget = dirGold; }
+            else if (state.t > 0.74 && state.t < 0.93) { ambTarget = ambMagenta; dirTarget = dirMagenta; }
+            ambientLight.color.lerp(ambTarget, 0.02);
+            directionalLight.color.lerp(dirTarget, 0.02);
+            if (chromaPass) chromaPass.uniforms.amount.value = 0.0016 + Math.abs(state.t - lastT) * 0.06;
+
+            if(state.t > 0.58 && state.t < 0.72) {
+                asteroidData.forEach(data => {
+                    const dist = camera.position.distanceTo(data.pos);
+                    if(dist < 80 && !data.scanned) {
+                        data.scanned = true; scannedAsteroids++;
+                        document.getElementById('ast-count').innerText = scannedAsteroids;
+                        const el = document.createElement('div'); el.className = `asteroid-label ${data.type}`;
+                        el.innerHTML = `${data.skill} <br> ${data.type === 'mastered' ? '●●●●●●' : '●●●●○○'}`;
+                        document.getElementById('asteroid-labels-container').appendChild(el); data.el = el;
+                    }
+                    if(data.scanned && data.el) {
+                        const vec = data.pos.clone().project(camera);
+                        if(vec.z < 1) { 
+                            data.el.style.left = `${(vec.x * .5 + .5) * window.innerWidth}px`;
+                            data.el.style.top = `${(vec.y * -.5 + .5) * window.innerHeight}px`;
+                            if(dist < 150) data.el.classList.add('visible'); else data.el.classList.remove('visible');
+                        } else { data.el.classList.remove('visible'); }
+                    }
+                });
+            }
+
+            // FIXED: Achievement Cards visibility and reset logic
+            if(state.t > 0.75 && state.t < 0.92) {
+                protoStars.forEach(star => {
+                    if(camera.position.distanceTo(star.pos) < 200 && !star.active) {
+                        star.active = true;
+                        gsap.to(star.light, { intensity: 3, duration: 0.2, yoyo: true, repeat: 1, onComplete: () => gsap.to(star.light, { intensity: 1, duration: 1 }) });
+                        gsap.to(star.sprite.material, { opacity: 1, duration: 0.5 });
+                        const el = document.getElementById(star.id);
+                        if (el) el.classList.add('active');
+                    }
+                });
+            } else {
+                // Completely reset proto-stars and hide achievements when scrolled away
+                protoStars.forEach(star => {
+                    if (star.active) {
+                        star.active = false;
+                        if(star.light) star.light.intensity = 0;
+                        if(star.sprite) star.sprite.material.opacity = 0.1;
+                        const el = document.getElementById(star.id);
+                        if (el) el.classList.remove('active');
+                    }
+                });
+            }
+
+            dockLights.forEach(l => l.intensity = (Math.sin(time * 5) + 1) * 1.5);
+
+            updateHUD(state.t, camera.position);
+            if (USE_COMPOSER && composer) { composer.render(dt); }
+            else { renderer.render(scene, camera); }
+
+            if(window.innerWidth > 768) {
+                mouseX += (targetMouseX * 5 - mouseX) * 0.1; mouseY += (targetMouseY * 3 - mouseY) * 0.1;
+                shipGroup.position.set(mouseX, mouseY, 0);
+                
+                const vx = targetMouseX * 5 - mouseX; const vy = targetMouseY * 3 - mouseY;
+                shipGroup.rotation.z = THREE.MathUtils.clamp(-vx * 2, -0.6, 0.6);
+                shipGroup.rotation.x = THREE.MathUtils.clamp(vy * 2, -0.4, 0.4);
+
+                if(Math.random() > 0.5) {
+                    const tMesh = new THREE.Mesh(trailGeo, trailMat.clone());
+                    tMesh.position.copy(shipGroup.position); tMesh.position.y -= 0.3; 
+                    tMesh.userData = { life: 1.0, vx: -vx*0.1, vy: -vy*0.1 - 0.05 };
+                    cursorScene.add(tMesh); trails.push(tMesh);
+                }
+                for(let i = trails.length - 1; i >= 0; i--) {
+                    const t = trails[i]; t.userData.life -= 0.02; t.position.x += t.userData.vx; t.position.y += t.userData.vy;
+                    t.material.opacity = t.userData.life;
+                    if(t.userData.life <= 0) { cursorScene.remove(t); trails.splice(i, 1); }
+                }
+                cursorRendererT.render(cursorScene, cursorCam);
+            }
+        }
+
+        /* ==========================================
+           9. FALLBACK PROCEDURAL TEXTURES
+           ========================================== */
+        function generateGalaxyTexture() {
+            const c = document.createElement('canvas'); c.width = c.height = 1024; const ctx = c.getContext('2d');
+            ctx.fillStyle = '#000000'; ctx.fillRect(0,0,1024,1024);
+            const core = ctx.createRadialGradient(512, 512, 0, 512, 512, 500);
+            core.addColorStop(0, 'rgba(255, 255, 255, 1)'); core.addColorStop(0.1, 'rgba(242, 166, 90, 0.9)'); 
+            core.addColorStop(0.4, 'rgba(77, 45, 115, 0.6)'); core.addColorStop(1, 'transparent');
+            ctx.fillStyle = core; ctx.fillRect(0,0,1024,1024);
+            ctx.translate(512, 512);
+            for(let i=0; i<4000; i++) {
+                const dist = Math.pow(Math.random(), 2) * 450; const spiralAngle = (Math.random() * Math.PI * 2) + (dist * 0.015);
+                ctx.fillStyle = Math.random() > 0.7 ? '#f2a65a' : '#a3d9f5';
+                ctx.globalAlpha = (1 - (dist/500)) * 0.8;
+                ctx.beginPath(); ctx.arc(Math.cos(spiralAngle) * dist, Math.sin(spiralAngle) * dist, Math.random() * 2, 0, Math.PI*2); ctx.fill();
+            }
+            return new THREE.CanvasTexture(c);
+        }
+        function generateNebulaTexture() {
+            const c = document.createElement('canvas'); c.width = c.height = 1024; const ctx = c.getContext('2d');
+            for(let i=0; i<30; i++) {
+                const x = Math.random() * 1024; const y = Math.random() * 1024; const r = 100 + Math.random() * 300;
+                const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+                const color = Math.random() > 0.5 ? '214, 100, 135' : '77, 45, 115'; 
+                grad.addColorStop(0, `rgba(${color}, 0.25)`); grad.addColorStop(1, 'transparent');
+                ctx.fillStyle = grad; ctx.fillRect(0, 0, 1024, 1024);
+            }
+            return new THREE.CanvasTexture(c);
+        }
+        function generateGlowTexture() {
+            const c = document.createElement('canvas'); c.width = c.height = 64; const ctx = c.getContext('2d');
+            const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+            grad.addColorStop(0, 'rgba(255, 255, 255, 1)'); grad.addColorStop(0.2, 'rgba(255, 180, 84, 0.8)'); grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = grad; ctx.fillRect(0,0,64,64); return new THREE.CanvasTexture(c);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight);
+            if (composer) composer.setSize(window.innerWidth, window.innerHeight);
+            if (bloomPass) bloomPass.setSize(window.innerWidth, window.innerHeight);
+            if(window.innerWidth > 768) { cursorCam.aspect = window.innerWidth / window.innerHeight; cursorCam.updateProjectionMatrix(); cursorRendererT.setSize(window.innerWidth, window.innerHeight); }
+        });
+        function jumpTo(targetT) { window.scrollTo({ top: targetT * (document.querySelector('.flight-container').scrollHeight - window.innerHeight), behavior: 'smooth' }); }
+        function transmitData(btn) {
+            btn.innerHTML = "[ TRANSMITTING... ]"; btn.style.color = "var(--hud-amber)"; btn.style.borderColor = "var(--hud-amber)";
+            const pulse = new THREE.PointLight(0x7af5e8, 5, 200); pulse.position.copy(camera.position); scene.add(pulse);
+            gsap.to(pulse.position, {
+                x: earthEnd.group.position.x, y: earthEnd.group.position.y, z: earthEnd.group.position.z, duration: 1.5, ease: "power2.in",
+                onComplete: () => {
+                    scene.remove(pulse); btn.innerHTML = "[ TRANSMITTED ✓ ]"; btn.style.color = "var(--hud-white)";
+                    setTimeout(() => { btn.innerHTML = "[ TRANSMIT ▶ ]"; btn.style.color = "var(--hud-cyan)"; btn.style.borderColor = "var(--hud-cyan)"; }, 3000);
+                }
+            });
+        }
+        animate();
+    </script>
+</body>
+</html>
