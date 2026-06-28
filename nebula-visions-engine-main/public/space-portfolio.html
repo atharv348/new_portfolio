@@ -671,15 +671,27 @@
         const textureLoader = new THREE.TextureLoader(loadingManager);
         textureLoader.setCrossOrigin('anonymous');
 
+        let loadingFinished = false;
+        function finishLoading() {
+            if (loadingFinished) return;
+            loadingFinished = true;
+            gsap.to('#loader', {
+                opacity: 0,
+                duration: 1,
+                onComplete: () => {
+                    document.getElementById('loader').style.display = 'none';
+                    initScrollTrigger();
+                }
+            });
+        }
+
         loadingManager.onProgress = (url, itemsLoaded, itemsTotal) => {
             document.getElementById('loader-fill').style.width = (itemsLoaded / itemsTotal * 100) + '%';
         };
-        loadingManager.onLoad = () => {
-            gsap.to('#loader', { opacity: 0, duration: 1, onComplete: () => {
-                document.getElementById('loader').style.display = 'none';
-                initScrollTrigger(); 
-            }});
-        };
+        loadingManager.onLoad = finishLoading;
+
+        // If any remote asset stalls, allow experience to continue.
+        setTimeout(finishLoading, 7000);
 
         const TEX = {
             earthDay: textureLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_atmos_2048.jpg'),
